@@ -1,0 +1,6 @@
+/build
+/.reach
+/.vscode
+/ext-*
+/node_modules
+rf.rsh
