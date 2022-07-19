@@ -4,3 +4,5 @@
 /ext-*
 /node_modules
 rf.rsh
+useme.mjs
+indexOld.mjs
