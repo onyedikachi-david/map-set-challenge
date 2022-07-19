@@ -35,7 +35,7 @@ const stdlib = loadStdlib(process.env);
       LOG(`Contract deployed and ready...`);
       ready.notify();
     },
-    log: (addr, ...args) => LOG(`Deployer sees this address was whitelisted:`, stdlib.formatAddress(addr), ...args),
+    log: (addr, ...args) => LOG(`Deployer sees this address:`, stdlib.formatAddress(addr), ...args),
   });
 
   await ready.wait();
