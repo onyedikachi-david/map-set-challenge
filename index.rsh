@@ -1,79 +1,88 @@
 'reach 0.1';
 /* eslint-disable */
 // 'use strict'
+
 /*
-
-Level 1 ($20 USDC)
---> Write a program that stores a whitelisted wallet Address. 
---> Address must be stored in Map or Set 
---> Hardcode this address, or set it to the known Bob address
---> Read about Untrustworthy Maps
+Level 2 ($40 USDC)
+--> Make the program interactive. Create 3 Participants, with at least one address failing the whitelist check and one passing.
+--> Incorporate a non-network token.
+--> Use launchToken to create a new token
+--> Distribute your tokens to the whitelisted wallet address
 --> Display status messages to the console
---> Deploying / attaching notifications
---> Display wallet network token balance
---> Display whitelisted wallet address
-
+--> Was the wallet address approved?
+--> Display token properties (name, unit, quantity)
+--> Did your tokens successfully deliver?
+--> This should be done in 2 files, index.rsh and index.mjs
 */
+
+// An api that recieves address from frontend [done]
+// stores address to the set [done]
+// recieves token details from frontend. [done]
+// sends a token to an address, which is stored in a set. [done]
+// A view that shows the address balance in contract. 
+
+const myFromMaybe = (m) => fromMaybe(m, (() => 0), ((x) => x));
 
 export const main = Reach.App(() => {
   setOptions({ untrustworthyMaps: true });
   const D = Participant('Deployer', {
     ready: Fun([], Null),
-    log: Fun(true, Null)
+    log: Fun(true, Null),
+    tokenDetails: Fun([], Token),
   });
   const W = API('Whitelist', {
-    addAddress: Fun([], Null) // Recieves an address from the frontend, Should it
+    addAddress: Fun([Address], Null), // Recieves an address from the frontend, Should it
   });
-  // const AddrView = View('Address', {
-  //   addr: Address,
-  // });
+  const A = API('Any', {
+    sendAza: Fun([UInt, Address], UInt)
+  })
+  const V = View({ getUserBalance: Fun([Address], UInt) })
   init();
 
-  D.publish();
+  D.only(() => {
+    const myToken = declassify(interact.tokenDetails());
+  });
+  D.publish(myToken);
   D.interact.ready();
-  // commit()
 
-  const whitelistMap = new Set()
-  // const count = 0
+  const whitelistAddrBal = new Map(UInt);
+  V.getUserBalance.set((m) => myFromMaybe(whitelistAddrBal[m]));
+  const whitelistMap = new Set();
 
-  // Using API to recieve and store an address
-  // var [] = []
-  // {AddrView.addr.set(this)}
-  // invariant( balance() == 0 );
-  // while (true) {
-  //   commit();
-
-  //   const [_, k1] = 
-  //     call(W.addAddress)
-  //     check(!whitelistMap.member(this))
-  //       whitelistMap.insert(this)
-  //       // AddrView.addr.set(this)
-  //       k1(null)
-       
-  //   continue
-  // }
-  // <-----------------------------------------------> 
-  // The previous code gives a theorem formalization error
-  // when I add line 47 
-  // <----------------------------------------------->
-  // ================================================
-  // ------ Lets try using parallelReduce -----------
-  // ================================================
-
-  const [keepGoing] = 
-  parallelReduce([true])
-    .invariant(balance()==0)
+  const [keepGoing, totalTokens, numOfAddr] = 
+  parallelReduce([true, 0, 0])
+    // .invariant(balance() >= hmm)
+    .invariant(balance(myToken) >= totalTokens)
     .while(keepGoing)
-    .api_(W.addAddress, () => {
-      check( ! whitelistMap.member(this), "Address added");
-      return [(k) => {
+    .paySpec([ myToken ])
+    .api_(W.addAddress, (addr) => {
+      check( ! whitelistMap.member(addr), "Address added");
+      return [( k) => {
         k(null);
-        whitelistMap.insert(this);
-        D.interact.log(this, " was added")
-        return [keepGoing]
+        whitelistMap.insert(addr);
+        D.interact.log(addr, " was added")
+        return [keepGoing, totalTokens, numOfAddr + 1]
       }]
     })
-    .timeout(false)
+    .api(
+      A.sendAza,
+      (depositAmt,addr) => {
+        assume(depositAmt > 0 && whitelistMap.member(addr));
+      },
+      (depositAmt,_) => [ 0, [ depositAmt, myToken ]],
+      (depositAmt,depositAddr,returnFunc) => {
+        require(depositAmt > 0 && whitelistMap.member(depositAddr));
+
+        const curBalance = myFromMaybe(whitelistAddrBal[depositAddr]);
+        whitelistAddrBal[depositAddr] = curBalance + depositAmt;
+
+        returnFunc(myFromMaybe(whitelistAddrBal[depositAddr]));
+        return [ keepGoing, totalTokens + depositAmt, numOfAddr ];
+      }
+    )
+    // .timeout(false)
+    transfer(balance()).to(D);
+    transfer([ 0, [ balance(myToken), myToken ] ]).to(D);
   commit()
   exit();
 });
